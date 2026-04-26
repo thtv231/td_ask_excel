@@ -268,11 +268,25 @@ app = FastAPI(title="Trade Intelligence API", version="1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+async def _warmup():
+    """Pre-load embedding model so first request doesn't timeout."""
+    import threading
+    def _load():
+        try:
+            log.info("Warming up embedding model...")
+            get_model()
+            log.info("Embedding model ready.")
+        except Exception as e:
+            log.warning(f"Warmup failed: {e}")
+    threading.Thread(target=_load, daemon=True).start()
 
 
 # ── GET /stats ─────────────────────────────────────────────────────────────────
