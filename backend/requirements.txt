@@ -3,8 +3,11 @@ uvicorn[standard]==0.34.0
 python-multipart==0.0.20
 python-dotenv==1.0.1
 chromadb==0.6.3
-sentence-transformers==3.4.1
 pandas==2.2.3
 openpyxl==3.1.5
 groq==0.13.1
 requests==2.32.3
+# CPU-only torch — giảm từ 2GB xuống ~200MB, đủ cho Railway free tier
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.6.0+cpu
+sentence-transformers==3.4.1
