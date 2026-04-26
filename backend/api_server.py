@@ -85,7 +85,11 @@ def get_db() -> chromadb.Collection:
     global _db_client
     if _db_client is None:
         _db_client = chromadb.PersistentClient(path=str(CHROMA_DIR))
-    return _db_client.get_collection(COLLECTION_NAME)
+    # get_or_create — an toàn khi collection chưa tồn tại (Railway lần đầu)
+    return _db_client.get_or_create_collection(
+        COLLECTION_NAME,
+        metadata={"hnsw:space": "cosine"},
+    )
 
 
 def get_model() -> SentenceTransformer:
