@@ -29,24 +29,31 @@ const SYSTEM_PROMPT = `Bạn là trợ lý nghiên cứu B2B chuyên về thươ
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 export async function POST(req: NextRequest) {
-  const { messages } = await req.json();
-  const lastUser = [...messages].reverse().find((m: { role: string }) => m.role === "user")?.content ?? "";
+  try {
+    const { messages } = await req.json();
+    const lastUser = [...messages].reverse().find((m: { role: string }) => m.role === "user")?.content ?? "";
 
-  const { context, sources } = await buildRagContext(lastUser);
+    // RAG — nếu embed/pinecone lỗi thì vẫn trả lời không có context
+    let context = "";
+    let sources: unknown[] = [];
+    try {
+      const rag = await buildRagContext(lastUser);
+      context = rag.context;
+      sources  = rag.sources;
+    } catch (ragErr) {
+      console.error("RAG error (non-fatal):", ragErr);
+    }
 
-  const groqMsgs: { role: string; content: string }[] = [
-    { role: "system", content: SYSTEM_PROMPT },
-  ];
-  if (context) {
-    groqMsgs.push({
-      role: "system",
-      content: `=== NGỮ CẢNH TỪ CƠ SỞ DỮ LIỆU ===\n${context}\n=====================================`,
-    });
-  }
-  groqMsgs.push(...messages);
-
-  async function* generate() {
-    yield `data: ${JSON.stringify({ sources })}\n\n`;
+    const groqMsgs: { role: string; content: string }[] = [
+      { role: "system", content: SYSTEM_PROMPT },
+    ];
+    if (context) {
+      groqMsgs.push({
+        role: "system",
+        content: `=== NGỮ CẢNH TỪ CƠ SỞ DỮ LIỆU ===\n${context}\n=====================================`,
+      });
+    }
+    groqMsgs.push(...messages);
 
     const stream = await groq.chat.completions.create({
       model: "llama-3.3-70b-versatile",
@@ -56,22 +63,30 @@ export async function POST(req: NextRequest) {
       temperature: 0.3,
     });
 
-    for await (const chunk of stream) {
-      const text = chunk.choices[0]?.delta?.content ?? "";
-      if (text) yield `data: ${JSON.stringify({ text })}\n\n`;
-    }
-    yield "data: [DONE]\n\n";
-  }
+    const sourcesJson = JSON.stringify({ sources });
 
-  return new Response(
-    new ReadableStream({
-      async start(controller) {
-        for await (const chunk of generate()) {
-          controller.enqueue(new TextEncoder().encode(chunk));
-        }
-        controller.close();
-      },
-    }),
-    { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform" } }
-  );
+    return new Response(
+      new ReadableStream({
+        async start(controller) {
+          const enc = new TextEncoder();
+          try {
+            controller.enqueue(enc.encode(`data: ${sourcesJson}\n\n`));
+            for await (const chunk of stream) {
+              const text = chunk.choices[0]?.delta?.content ?? "";
+              if (text) controller.enqueue(enc.encode(`data: ${JSON.stringify({ text })}\n\n`));
+            }
+            controller.enqueue(enc.encode("data: [DONE]\n\n"));
+          } catch (streamErr) {
+            controller.enqueue(enc.encode(`data: ${JSON.stringify({ text: `\n\n⚠️ Lỗi: ${String(streamErr)}` })}\n\ndata: [DONE]\n\n`));
+          } finally {
+            controller.close();
+          }
+        },
+      }),
+      { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform" } }
+    );
+  } catch (err) {
+    console.error("Chat route error:", err);
+    return Response.json({ detail: String(err) }, { status: 500 });
+  }
 }

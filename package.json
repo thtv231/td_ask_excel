@@ -8,6 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@huggingface/inference": "^4.13.15",
     "@huggingface/transformers": "^4.2.0",
     "@pinecone-database/pinecone": "^4.0.0",
     "groq-sdk": "^0.13.0",

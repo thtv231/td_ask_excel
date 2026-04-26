@@ -4,8 +4,7 @@ import { join } from "path";
 
 env.cacheDir = join(tmpdir(), "hf_cache");
 env.allowLocalModels = false;
-// Explicitly disable WASM proxy — run inline inside the serverless function
-if (env.backends?.onnx?.wasm) env.backends.onnx.wasm.proxy = false;
+env.allowRemoteModels = true;
 
 type FeaturePipeline = (
   input: string | string[],
