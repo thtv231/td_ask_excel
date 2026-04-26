@@ -4,9 +4,11 @@ import { join } from "path";
 
 env.cacheDir = join(tmpdir(), "hf_cache");
 env.allowLocalModels = false;
+// Explicitly disable WASM proxy — run inline inside the serverless function
+if (env.backends?.onnx?.wasm) env.backends.onnx.wasm.proxy = false;
 
 type FeaturePipeline = (
-  text: string | string[],
+  input: string | string[],
   opts: { pooling: string; normalize: boolean }
 ) => Promise<{ data: Float32Array; dims: number[] }>;
 
@@ -16,7 +18,8 @@ async function getPipe(): Promise<FeaturePipeline> {
   if (!_pipe) {
     _pipe = (await pipeline(
       "feature-extraction",
-      "Xenova/paraphrase-multilingual-mpnet-base-v2"
+      "Xenova/paraphrase-multilingual-mpnet-base-v2",
+      { dtype: "q8" }
     )) as unknown as FeaturePipeline;
   }
   return _pipe;
@@ -24,7 +27,7 @@ async function getPipe(): Promise<FeaturePipeline> {
 
 export async function embedText(text: string): Promise<number[]> {
   const pipe = await getPipe();
-  const out = await pipe(text, { pooling: "mean", normalize: true });
+  const out = await pipe(text.slice(0, 512), { pooling: "mean", normalize: true });
   return Array.from(out.data);
 }
 
