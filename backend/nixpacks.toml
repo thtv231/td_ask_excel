@@ -1,0 +1,8 @@
+[phases.build]
+cmds = [
+  "pip install -r requirements.txt",
+  "python -c \"from sentence_transformers import SentenceTransformer; print('Downloading model...'); SentenceTransformer('paraphrase-multilingual-mpnet-base-v2'); print('Model cached.')\""
+]
+
+[start]
+cmd = "uvicorn api_server:app --host 0.0.0.0 --port ${PORT:-8000}"
